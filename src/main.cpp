@@ -12,8 +12,11 @@
 
 namespace {
 
-constexpr int MIN_FILAS     = 24;
-constexpr int MIN_COLUMNAS  = 52; // bloque completo tablero+panel+ayuda de teclas
+// 27 filas = bloque fijo mas alto (tablero 22 + cabecera del panel + zona de
+// mensajes de reserva). Con esto la pausa/fin no hacen scroll en terminales
+// justas; el tamano de diseno sigue siendo mucho mayor (168x63).
+constexpr int MIN_FILAS     = 27;
+constexpr int MIN_COLUMNAS  = 52; // bloque completo tablero + panel lateral
 
 bool terminalSuficiente() {
     winsize tam{};

@@ -118,15 +118,18 @@ else:
 ancla = partida_limpia.find("SIGUIENTE")
 menu_borrado = ancla != -1 and "JUGAR" not in partida_limpia[ancla:]
 
-TECHO = "(!" + "\\/" * 10 + "!)"
-SUELO = "*" + "#" * 22 + "*"
+SUELO       = "<!" + "=" * 20 + "!>"
+ADORNO      = "  " + "\\/" * 10
+FILA_VACIA  = "<!" + " ." * 10 + "!>"
 
 comprobaciones = {
     "menu titulado":       "[][][] [][][] [][][] [][][] [][][] [][][]" in limpio,
     "opciones del menu":   "JUGAR" in limpio and "COMO SE JUEGA" in limpio and "AJUSTES" in limpio,
     "record en menu":      "RECORD" in limpio,
-    "techo del tablero":   TECHO in limpio,
     "suelo del tablero":   SUELO in limpio,
+    "adorno del tablero":  ADORNO in limpio,
+    "puntos de fondo":     FILA_VACIA in limpio,
+    "pausa visible":       "P A U S A" in limpio,
     "bloque coloreado":    "[]" in limpio,
     "panel puntos":        "PUNTOS" in limpio,
     "panel nivel":         "NIVEL" in limpio,

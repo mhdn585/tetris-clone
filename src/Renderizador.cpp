@@ -16,17 +16,22 @@ void volcar(const std::string& s) {
 
 constexpr int ANCHO_CONTENIDO = ANCHO_TABLERO * ANCHO_BLOQUE; // 20 caracteres
 
-// Nuevo marco del pozo:
-//   techo:  (!\/\/\/\/...!)   lados: (!  contenido  !)   suelo: *####...*
-std::string hacerBordeSup() {
+// Marco del pozo (diseno nuevo):
+//   lados:   <!  contenido  !>     suelo:  <!====================!>
+//   techo:   ninguna linea (por encima del tablero visible no hay nada: ahi
+//            spawnean las piezas y aun no se dibujan).
+//   adorno:  una fila de \/ por debajo del suelo, fuera del marco.
+// El fondo del pozo son puntos (" .") que desaparecen donde pisa una pieza.
+const std::string BORDE_INF = "<!" + std::string(ANCHO_CONTENIDO, '=') + "!>";
+const std::string MARCO_IZQ = "<!";
+const std::string MARCO_DER = "!>";
+
+std::string hacerAdorno() {
     std::string rayado;
     for (int i = 0; i < ANCHO_TABLERO; ++i) rayado += "\\/";
-    return "(!" + rayado + "!)";
+    return "  " + rayado; // sangria para alinearlo bajo el contenido
 }
-const std::string BORDE_SUP = hacerBordeSup();
-const std::string BORDE_INF = "*" + std::string(ANCHO_CONTENIDO + 2, '#') + "*";
-const std::string MARCO_IZQ = "(!";
-const std::string MARCO_DER = "!)";
+const std::string ADORNO_INF = hacerAdorno();
 
 const std::string BORDE_INI = "\x1b[1m";  // negrita
 const std::string BORDE_FIN = ANSI_RESET;
@@ -173,9 +178,12 @@ std::vector<std::string> Renderizador::filasTablero(
     const Tablero& tablero, const Tetramino* pieza,
     const std::vector<int>& filasDestello) const {
 
-    // Celdas como fragmentos de texto independientes (colores embebidos).
+    // Fondo del pozo: cada celda vacia es un punto tenue (" ."). Se pinta via
+    // pinta para respetar la paleta (gris en CLASICA, fosforo en MATRIX). Donde
+    // pisa una pieza, el punto se sustituye por su bloque "[]".
+    const std::string vacio = " " + pinta(color::VACIO, ".");
     std::vector<std::vector<std::string>> rejilla(
-        ALTO_TABLERO, std::vector<std::string>(ANCHO_TABLERO, "  "));
+        ALTO_TABLERO, std::vector<std::string>(ANCHO_TABLERO, vacio));
 
     // 1) Bloques ya fijados.
     for (int y = 0; y < ALTO_TABLERO; ++y)
@@ -197,10 +205,11 @@ std::vector<std::string> Renderizador::filasTablero(
         for (int x = 0; x < ANCHO_TABLERO; ++x)
             rejilla[y][x] = BORDE_INI + pinta(color::TEXTO, bloquePieza(BLOQUE));
 
-    // 4) Composicion de filas con marcos: (!\/\/\/...!) / (! cel !!) / *####*
+    // 4) Composicion: <!  celdas  !> por fila, luego el suelo <!====...====!>
+    //    y el adorno \/ bajo el marco. Sin borde superior: el techo es el vacio
+    //    donde spawnean las piezas.
     std::vector<std::string> filas;
     filas.reserve(ALTO_TABLERO + 2);
-    filas.push_back(pinta(color::BORDE, BORDE_SUP));
     for (int y = 0; y < ALTO_TABLERO; ++y) {
         std::string fila = pinta(color::BORDE, MARCO_IZQ);
         for (int x = 0; x < ANCHO_TABLERO; ++x) fila += rejilla[y][x];
@@ -208,6 +217,7 @@ std::vector<std::string> Renderizador::filasTablero(
         filas.push_back(fila);
     }
     filas.push_back(pinta(color::BORDE, BORDE_INF));
+    filas.push_back(pinta(color::BORDE, ADORNO_INF));
     return filas;
 }
 
@@ -276,25 +286,33 @@ void Renderizador::pintarPartida(const Tablero& tablero, const Tetramino* pieza,
                                  const std::vector<int>& filasDestello) {
     abrirFrame();
 
-    auto filas = filasTablero(tablero, enPausa ? nullptr : pieza, filasDestello);
+    // En pausa el pozo se congela CON la pieza activa visible: Juego ya detiene
+    // la caida, aqui nos limitamos a no borrarla. Nunca se pinta texto dentro
+    // del tablero: los avisos van en la zona de mensajes, bajo el bloque.
+    auto filas = filasTablero(tablero, pieza, filasDestello);
     auto panel = filasPanel(puntos, siguiente);
 
-    if (enPausa) {
-        filas[10] = pinta(color::BORDE, MARCO_IZQ) +
-                    centradoPintado(" P A U S A ", ANCHO_CONTENIDO, color::O, true) +
-                    pinta(color::BORDE, MARCO_DER);
-        filas[12] = pinta(color::BORDE, MARCO_IZQ) +
-                    centradoPintado("P para seguir", ANCHO_CONTENIDO, color::TEXTO, false) +
-                    pinta(color::BORDE, MARCO_DER);
-    }
-
     std::vector<std::string> lineas;
-    lineas.reserve(filas.size() + 2);
+    lineas.reserve(filas.size() + 4);
     lineas.push_back("  " + panel[0]);
     for (size_t i = 0; i < filas.size(); ++i)
         lineas.push_back(filas[i] + "  " + panel[i + 1]);
-    lineas.push_back(pinta(color::BORDE,
-                           " A D mover   W rotar   S bajar   P pausa   Q menu"));
+
+    // Zona de mensajes de altura FIJA bajo el pozo: 1 fila de separacion + 2
+    // de aviso. Al pausar no cambia el numero de lineas del bloque, y como se
+    // centra en vertical, el tablero deja de saltar al pulsar P. Los controles
+    // ya viven en el panel derecho, asi que no se pime un pie de teclas aqui.
+    const int anchoMsg = ANCHO_CONTENIDO + 4; // ancho del pozo con marcos
+    lineas.push_back("");                      // separacion pozo <-> mensajes
+    if (enPausa) {
+        lineas.push_back(centradoPintado("P A U S A", anchoMsg, color::O, true));
+        lineas.push_back(centradoPintado("P para continuar", anchoMsg,
+                                          color::TEXTO, false));
+    } else {
+        lineas.push_back("");
+        lineas.push_back("");
+    }
+
     pintarBloqueCentrado(lineas); // tablero + panel, al centro de la terminal
     cerrarFrame();
 }
@@ -302,31 +320,24 @@ void Renderizador::pintarPartida(const Tablero& tablero, const Tetramino* pieza,
 void Renderizador::pintarFin(const Tablero& tablero, const Puntuacion& puntos,
                              bool esNuevoRecord) {
     abrirFrame();
-    auto filas = filasTablero(tablero, nullptr, {});
+    auto filas = filasTablero(tablero, nullptr, {}); // pozo limpio, sin superponer
     auto panel = filasPanel(puntos, Tipo::O);
 
-    filas[9]  = pinta(color::BORDE, MARCO_IZQ) +
-                centradoPintado(" F I N   D E   L A ", ANCHO_CONTENIDO, color::Z, true) +
-                pinta(color::BORDE, MARCO_DER);
-    filas[10] = pinta(color::BORDE, MARCO_IZQ) +
-                centradoPintado(" P A R T I D A ", ANCHO_CONTENIDO, color::Z, true) +
-                pinta(color::BORDE, MARCO_DER);
-    filas[12] = pinta(color::BORDE, MARCO_IZQ) +
-                centradoPintado(esNuevoRecord ? " ! NUEVO RECORD !" : "  ENTER: repetir",
-                                ANCHO_CONTENIDO,
-                                esNuevoRecord ? color::S : color::TEXTO, true) +
-                pinta(color::BORDE, MARCO_DER);
-    filas[13] = pinta(color::BORDE, MARCO_IZQ) +
-                centradoPintado(esNuevoRecord ? "  ENTER: repetir" : "     Q: menu",
-                                ANCHO_CONTENIDO,
-                                esNuevoRecord ? color::TEXTO : color::BORDE, false) +
-                pinta(color::BORDE, MARCO_DER);
-
     std::vector<std::string> lineas;
-    lineas.reserve(filas.size() + 2);
+    lineas.reserve(filas.size() + 4);
     lineas.push_back("  " + panel[0]);
     for (size_t i = 0; i < filas.size(); ++i)
         lineas.push_back(filas[i] + "  " + panel[i + 1]);
+
+    // Zona de mensajes bajo el bloque: el tablero nunca lleva texto encima.
+    // Una fila de separacion despeja el aviso del adorno del pozo (igual que
+    // en la pausa). Se conserva el pie: no esta duplicado en el panel.
+    const int anchoMsg = ANCHO_CONTENIDO + 4; // ancho del pozo con marcos
+    lineas.push_back("");
+    lineas.push_back(centradoPintado("FIN DE LA PARTIDA", anchoMsg, color::Z, true));
+    if (esNuevoRecord)
+        lineas.push_back(centradoPintado("! NUEVO RECORD !", anchoMsg, color::S, true));
+
     lineas.push_back(pinta(color::BORDE, " ENTER repetir   Q menu"));
     pintarBloqueCentrado(lineas); // mismo centrado que la partida
     cerrarFrame();
@@ -395,11 +406,6 @@ void Renderizador::pintarMenu(int seleccion, int record) {
     lineas.push_back("");
     lineas.push_back(centradoPintado("RECORD: " + std::to_string(record),
                                      anchoPantalla_, color::O, true));
-    lineas.push_back("");
-    lineas.push_back(centradoPintado("Flechas / W S navegar   ENTER confirmar",
-                                     anchoPantalla_, color::BORDE, false));
-    lineas.push_back(centradoPintado("Q salir     1 / 2 / 3 / 4 elegir opcion",
-                                     anchoPantalla_, color::BORDE, false));
 
     // Filas en blanco arriba para el centrado vertical (su \x1b[K limpia la
     // pantalla anterior); el \x1b[J de cerrarFrame borra lo que sobre abajo.

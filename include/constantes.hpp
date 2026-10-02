@@ -26,7 +26,9 @@ inline constexpr int ALTO_SPAWN = 2;
 // Fila del panel donde empieza el area de la proxima pieza y filas que ocupa.
 // Limpiar estas filas antes de dibujar evita que queden bloques "fantasma" de
 // la pieza anunciada anteriormente cuando llega una mas pequena.
-inline constexpr int FILA_PREVIEW  = 10;
+// FILA_PREVIEW = 11 deja la fila 10 en blanco como separador entre la palabra
+// SIGUIENTE (fila 9) y la pieza: antes quedaban pegadas.
+inline constexpr int FILA_PREVIEW  = 11;
 inline constexpr int ALTO_PREVIEW  = 5;
 
 // --- Colores (ANSI 256) ------------------------------------------------------
